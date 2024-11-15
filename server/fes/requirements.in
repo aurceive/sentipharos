@@ -1,0 +1,10 @@
+sentence_transformers
+transformers
+torch
+fastapi
+uvicorn
+pydantic
+
+# pip install pip-tools
+# pip-compile --strip-extras server/fes/requirements.in
+# pip install -r server/fes/requirements.txt

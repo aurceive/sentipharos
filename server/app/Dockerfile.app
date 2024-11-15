@@ -7,9 +7,8 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Копируем приложение
-COPY . /app
-WORKDIR /app
-
+COPY app.py .
+WORKDIR /server
 # Указываем порт
 ENV PORT 8080
 

@@ -1,0 +1,11 @@
+runtime: custom
+env: flex
+
+manual_scaling:
+  instances: 1
+
+# env_variables:
+#   MONGO_URI: "mongodb://username:password@host:port/my_database"
+
+# gcloud app deploy server/worker/app.yaml --image-url=gcr.io/sentipharos/worker:latest
+

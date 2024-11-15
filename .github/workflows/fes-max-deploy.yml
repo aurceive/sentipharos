@@ -1,0 +1,49 @@
+name: 'Build FES Max Docker image and deploy to Cloud Run'
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: 'ubuntu-latest'
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332' # actions/checkout@v4
+
+      # Configure Workload Identity Federation and generate an access token.
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+
+      # Authenticate Docker to use Google Cloud Artifact Registry
+      - name: Authenticate Docker
+        run: |
+          gcloud auth configure-docker
+
+      # Build Docker image
+      - name: Build Docker image
+        run: |
+          docker build -t gcr.io/sentipharos/fes-max --file server/fes/Dockerfile.fes_max server/fes
+
+      # Push Docker image to Google Cloud Artifact Registry
+      - name: Push Docker image
+        run: |
+          docker push gcr.io/sentipharos/fes-max
+      
+      # Deploy Docker image to Cloud Run
+      - name: Deploy Docker image to Cloud Run
+        run: |
+          gcloud run deploy fes-max \
+            --image gcr.io/sentipharos/fes-max \
+            --platform managed \
+            --region europe-north1 \
+            --allow-unauthenticated \
+            --memory 16Gi \
+            --cpu 6

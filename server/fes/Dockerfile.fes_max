@@ -1,0 +1,36 @@
+# Dockerfile
+# Используем Python-образ
+FROM python:3.12-slim
+
+# Устанавливаем зависимости
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Копируем кэш модели
+# COPY .cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00001-of-00002.safetensors \
+#   /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00001-of-00002.safetensors
+# COPY .cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00002-of-00002.safetensors \
+#   /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00002-of-00002.safetensors
+COPY .cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct
+
+# Скопируйте ваш скрипт в контейнер
+COPY max.py /app/app.py
+
+# Задайте рабочую директорию
+WORKDIR /app
+
+# Укажите порт, который будете использовать
+EXPOSE 8080
+
+# Запуск приложения с uvicorn для асинхронного сервера
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
+
+# fes — feature extraction service
+
+# docker build -t gcr.io/sentipharos/fes_max --file server/fes/Dockerfile.fes_max server/fes
+# docker push gcr.io/sentipharos/fes_max
+# gcloud builds submit --tag gcr.io/sentipharos/fes_max server/fes
+
+
+
+# gcloud run deploy fes-max --image gcr.io/sentipharos/fes_max --platform managed --region europe-north1 --allow-unauthenticated --memory 16Gi --cpu 6

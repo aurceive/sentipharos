@@ -1,0 +1,12 @@
+pydantic~=2.9
+tornado~=6.4
+motor~=3.6
+beanie~=1.27
+pip-tools
+
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+torch
+transformers
