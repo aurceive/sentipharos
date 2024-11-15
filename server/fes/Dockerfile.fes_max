@@ -11,7 +11,10 @@ RUN pip install -r requirements.txt
 #   /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00001-of-00002.safetensors
 # COPY .cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00002-of-00002.safetensors \
 #   /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00002-of-00002.safetensors
-COPY .cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct
+# COPY .cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct
+
+# Загузка модели
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/e5-mistral-7b-instruct')"
 
 # Скопируйте ваш скрипт в контейнер
 COPY max.py /app/app.py
