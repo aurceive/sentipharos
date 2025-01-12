@@ -5,5 +5,8 @@ google-auth~=2.36
 google-auth-oauthlib~=1.2
 google-auth-httplib2~=0.2
 google-api-python-client~=2.151
+aiohttp~=3.11
 
-pip-tools
+# pip install pip-tools
+# pip-compile --strip-extras server/worker/requirements.in
+# pip install -r server/worker/requirements.txt

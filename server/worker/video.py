@@ -1,102 +1,142 @@
-# Данный воркер должен делать следующее:
-# 1. Доставать все коментарии из под видео, на которые есть подписка и сохранять их в базу данных
-# 2. Периодически проверять наличие новых комментариев
-
-import asyncio
-import logging
+from time import monotonic
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
-from server.db.video import Video
-from server.db.comment import Comment
-import os
-from typing import List, Optional
-from googleapiclient.discovery import build
+from server.common import MONGO_URI, YOUTUBE_API_KEY, logger
+from server.db.youtube.comment import Comment, CommentInfo
+from server.db.youtube.video import Video
+from server.db.processes.comment_fetching import CommentSubscription
+from typing import Optional
+import aiohttp, asyncio
 
+client = AsyncIOMotorClient(MONGO_URI)
 
-API_KEY = os.getenv("YOUTUBE_API_KEY", 'AIzaSyDmeT8Isv-2I-jkqr5K5o8bEhXg66JfTEQ') # TODO: secure this token
-mongo_uri = os.getenv("MONGO_URI", "mongodb+srv://admin:admin@sentipharos.nnvrgyb.mongodb.net/?retryWrites=true&w=majority&appName=Sentipharos") # TODO: secure this uri
-client = AsyncIOMotorClient(mongo_uri)
-youtube = build('youtube', 'v3', developerKey=API_KEY)
+YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 
-async def get_subscribed_videos():
-  videos = await Video.find(Video.subscription == True).to_list()
-  return videos
+async def get_subscriptions() -> list[CommentSubscription]:
+  '''Получить все подписки на комментарии'''
+  return await CommentSubscription.find().to_list()
 
-async def get_comments(video_id: str, page_token: Optional[str] = None) -> tuple[Optional[List[dict]], Optional[str]]:
+async def get_comments(
+    session: aiohttp.ClientSession,
+    video_id: str,
+    page_token: Optional[str] = None,
+    limit: int = 100
+  ) -> tuple[Optional[list[dict]], Optional[str]]:
+  '''Получить комментарии из под видео'''
   comments = []
-  request = youtube.commentThreads().list(
-    part="snippet",
-    videoId=video_id,
-    order="time",
-    pageToken=page_token,
-    maxResults=100
-  )
+  url = f'{YOUTUBE_API_BASE}/commentThreads'
+  params = {
+    'part': 'snippet',
+    'videoId': video_id,
+    'order': 'time',
+    'maxResults': limit,
+    'key': YOUTUBE_API_KEY,
+    'fields':
+      'nextPageToken,items(snippet(topLevelComment(id,\
+      snippet(authorDisplayName,authorProfileImageUrl,authorChannelUrl,\
+      authorChannelId(value),textDisplay,textOriginal,likeCount,publishedAt,\
+      updatedAt))))'
+  }
+
+  if page_token:
+    params['pageToken'] = page_token
+
   try:
-    response = request.execute()
-    for item in response['items']:
-      comment = item['snippet']['topLevelComment']
-      comments.append(comment)
-    return comments, response.get('nextPageToken')
+    async with session.get(url, params=params) as response:
+      if response.status != 200:
+        logger.error(f'Error fetching comments for video {video_id}: {response.status} - {await response.text()}')
+        return None, None
+      data = await response.json()
+      for item in data.get('items', []):
+        comment = item['snippet']['topLevelComment']
+        comments.append(comment)
+      return comments, data.get('nextPageToken')
   except Exception as e:
-    logging.error(f"Error getting comments for video {video_id}: {e}")
+    logger.error(f'Error fetching comments for video {video_id}: {e}')
     return None, None
 
-async def save_comments(comments: List[dict], video: Video) -> bool:
-  exist = False
+
+async def save_comments(comments: list[dict], video: Video) -> bool:
+  '''Сохраняет комментарии в базе данных, возвращает True, если хотя бы один комментарий уже существует'''
+  existing_comment_ids = set()
+  if comments:
+    existing_comments = await Comment.find({"comment_id": {"$in": [comment['id'] for comment in comments]}}).to_list()
+    existing_comment_ids = {comment.comment_id for comment in existing_comments}
+  
+  new_comments: list[Comment] = []
   for comment in comments:
     try:
+      if comment['id'] in existing_comment_ids:
+        continue
       snippet = comment['snippet']
-      existing_comment = await Comment.find_one(Comment.comment_id == comment['id'])
-      if not existing_comment:
-        new_comment = Comment(
-          comment_id=comment['id'],
-          video=video,
+      new_comments.append(Comment(
+        comment_id=comment['id'],
+        video=video,
+        info=CommentInfo(
           text_display=snippet['textDisplay'],
           text_original=snippet['textOriginal'],
           author_display_name=snippet['authorDisplayName'],
-          author_profile_image_url=snippet['authorProfileImageUrl'],
-          author_channel_url=snippet['authorChannelUrl'],
-          author_channel_id=snippet['authorChannelId']['value'],
+          author_profile_image_url=snippet.get('authorProfileImageUrl'),
+          author_channel_url=snippet.get('authorChannelUrl'),
+          author_channel_id=snippet.get('authorChannelId', {}).get('value'),
           like_count=snippet['likeCount'],
           published_at=snippet['publishedAt'],
           updated_at=snippet['updatedAt']
         )
-        await new_comment.insert()
-      else:
-        exist = True
+      ))
     except Exception as e:
-      logging.error(f"Error saving comment {comment.get('id', 'unknown')}: {e}")
-  if not exist:
-    logging.info(f"Saved {len(comments)} comments for video {video.video_id}")
-  return exist
+      logger.error(f'Error saving comment {comment.get("id", "unknown")}: {e}')
 
-async def process_video(video: Video):
+  if new_comments:
+    try:
+      await Comment.insert_many(new_comments)
+    except Exception as e:
+      logger.error(f'Error saving comments: {e}')
+      return False
+    logger.info(f'Saved {len(new_comments)} comments for video {video.video_id}')
+  # logger.info(f'Query for {video.video_id} returned {len(new_comments)} new comments and {len(existing_comment_ids)} existing comments')
+  return len(existing_comment_ids) > 0
+
+
+async def process_subscription(session: aiohttp.ClientSession, subscription: CommentSubscription):
+  '''Обрабатывает комментарии для одного видео'''
+  video = subscription.video
   page_token = None
+  limit = 10
   while True:
-    comments, page_token = await get_comments(video.video_id, page_token)
+    comments, page_token = await get_comments(session, video.video_id, page_token, limit)
+    limit = 100
     if comments:
       exist = await save_comments(comments, video)
-      if exist and video.first_comment_fetched:
+      if exist and subscription.first_comment_fetched:
         break
       if not page_token:
-        video.first_comment_fetched = True
-        await video.save()
+        subscription.first_comment_fetched = True
+        await subscription.save()
         break
     else:
       break
     await asyncio.sleep(1)
 
-async def main():
-  await init_beanie(database=client.get_database("sentipharos"), document_models=[Video, Comment])
+async def main(toggle: list[bool]):
+  # Инициализация базы данных
+  await init_beanie(database=client.get_database('sentipharos'), document_models=[Comment, CommentSubscription])
+
+  # Создаём тестовую запись, если её ещё нет
+  # if not await Video.find_one(Video.video_id == 'hjVe7WztrdY'):
+  #   await Video(video_id='hjVe7WztrdY', subscription=True).insert()
   
-  if not await Video.find_one(Video.video_id == "hjVe7WztrdY"):
-    await Video(video_id="hjVe7WztrdY", subscription=True).insert()
+  logger.info('Video worker started')
 
-  while True:
-    videos = await get_subscribed_videos()
-    for video in videos:
-      await process_video(video)
-    await asyncio.sleep(60 * 10)
+  # Открываем асинхронную сессию
+  async with aiohttp.ClientSession() as session:
+    while toggle[0]:
+      start_time = monotonic()
+      subscriptions = await get_subscriptions()
+      tasks = [process_subscription(session, subscription) for subscription in subscriptions]
+      await asyncio.gather(*tasks)
+      elapsed_time = monotonic() - start_time
+      await asyncio.sleep(60 * 5 - elapsed_time)
 
-if __name__ == "__main__":
-  asyncio.run(main())
+if __name__ == '__main__':
+  asyncio.run(main([True]))

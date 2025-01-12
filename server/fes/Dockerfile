@@ -3,34 +3,30 @@
 FROM python:3.12-slim
 
 # Устанавливаем зависимости
-COPY requirements.txt .
+COPY server/fes/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
 # Копируем кэш модели
-# COPY .cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00001-of-00002.safetensors \
-#   /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00001-of-00002.safetensors
-# COPY .cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00002-of-00002.safetensors \
-#   /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct/snapshots/07163b72af1488142a360786df853f237b1a3ca1/model-00002-of-00002.safetensors
-COPY .cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct /root/.cache/huggingface/hub/models--intfloat--e5-mistral-7b-instruct
+COPY server/.cache/st/models--intfloat--multilingual-e5-large-instruct \
+  /root/.cache/st/models--intfloat--multilingual-e5-large-instruct
 
-# Скопируйте ваш скрипт в контейнер
-COPY max.py /app/app.py
+COPY server/fes/app.py app.py
 
-# Задайте рабочую директорию
-WORKDIR /app
+WORKDIR /
 
-# Укажите порт, который будете использовать
 EXPOSE 8080
 
 # Запуск приложения с uvicorn для асинхронного сервера
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
 
 # fes — feature extraction service
 
-# docker build -t gcr.io/sentipharos/fes_max --file server/fes/Dockerfile.fes_max server/fes
-# docker push gcr.io/sentipharos/fes_max
+# docker build -t gcr.io/sentipharos/fes --file server/fes/Dockerfile .
+# docker push gcr.io/sentipharos/fes
 
-# gcloud builds submit --tag gcr.io/sentipharos/fes_max server/fes
+# gcloud run deploy fes --image gcr.io/sentipharos/fes --platform managed --timeout 5m
+#   --region europe-north1 --allow-unauthenticated --memory 5Gi --cpu 2 --max-instances 1
 
-
-# gcloud run deploy fes-max --image gcr.io/sentipharos/fes_max --platform managed --region europe-north1 --allow-unauthenticated --memory 16Gi --cpu 6
+# gcloud run services update fes --region europe-north1 --memory 8Gi --cpu 4
+# gcloud run services update fes --region europe-north1 --concurrency 80
+# gcloud run services update fes --region europe-north1 --timeout 10m

@@ -1,17 +1,12 @@
 from beanie import Document, Indexed
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Annotated, Optional
 
 from .video import Video
 
-# class Embedding(BaseModel):
-#   model: str
-#   embedding: list[float]
-
-class Comment(Document):
-  comment_id: Annotated[str, Indexed(unique=True)]
-  video: Video
+class CommentInfo(BaseModel):
+  info_date: datetime = Field(default_factory=datetime.now)
   text_display: str
   text_original: str
   author_display_name: str
@@ -19,9 +14,20 @@ class Comment(Document):
   author_channel_url: Optional[str]
   author_channel_id: Optional[str]
   like_count: int
-  published_at: Annotated[str, Indexed()]
+  published_at: str
   updated_at: str
-  embedding: Annotated[Optional[list[float]], Indexed(partialFilterExpression={"embedding": None})] = None
+
+# class Embedding(BaseModel):
+#   model: Annotated[str, Indexed(unique=True)]
+#   embedding: Annotated[Optional[list[float]], Indexed(partialFilterExpression={'embedding': None})]
+#   error: Optional[str] = None
+
+class Comment(Document):
+  comment_id: str = Indexed(unique=True)
+  info: CommentInfo
+  video: Video
+  embedding: Annotated[Optional[list[float]], Indexed(partialFilterExpression={'embedding': None})] = None
+  # embeddings: list[Embedding] = Field(default_factory=list)
 
 # comment_example = {
 #   'kind': 'youtube#commentThread',

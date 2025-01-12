@@ -1,12 +1,12 @@
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
-from typing import Annotated, Optional
+from typing import Optional
 from .channel import Channel
 
 class VideoInfo(BaseModel):
-  info_date: datetime = datetime.now()
-  published_at: Annotated[str, Indexed()]
+  info_date: datetime = Field(default_factory=datetime.now)
+  published_at: str = Indexed()
   channel: Channel
   title: str
   description: str
@@ -20,10 +20,8 @@ class VideoInfo(BaseModel):
   comment_count: int
 
 class Video(Document):
-  video_id: Annotated[str, Indexed(unique=True)]
+  video_id: str = Indexed(unique=True)
   info: Optional[VideoInfo] = None
-  subscription: bool = False
-  first_comment_fetched: bool = False
 
 
 # video_example = {'kind': 'youtube#video',
