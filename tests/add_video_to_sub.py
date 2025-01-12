@@ -1,11 +1,12 @@
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
+from server.common import MONGO_URI
 from server.db.youtube.video import Video
 from server.db.processes.comment_fetching import CommentSubscription
 import os
 import asyncio
 
-mongo_uri = os.getenv("MONGO_URI", "mongodb+srv://admin:admin@sentipharos.nnvrgyb.mongodb.net/?retryWrites=true&w=majority&appName=Sentipharos")
+mongo_uri = os.getenv("MONGO_URI") or MONGO_URI
 client = AsyncIOMotorClient(mongo_uri)
 
 async def main():

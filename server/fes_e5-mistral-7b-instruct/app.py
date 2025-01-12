@@ -58,7 +58,7 @@ async def predict(request: Request):
 
   response = Response(model=model_name, outputs=embeddings.tolist())
   # Очищаем оперативную память
-  del embeddings
+  del embeddings, request
   return response.model_dump()
 
 

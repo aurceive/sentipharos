@@ -1,8 +1,9 @@
 from pymongo import MongoClient
 from datetime import datetime
+from server.common import MONGO_URI
 
 # Подключение к базе данных MongoDB
-client = MongoClient("mongodb+srv://admin:admin@sentipharos.nnvrgyb.mongodb.net/?retryWrites=true&w=majority&appName=Sentipharos")
+client = MongoClient(MONGO_URI)
 db = client["sentipharos"]  # Замените на ваше имя базы данных
 collection = db["Comment"]  # Замените на имя коллекции
 

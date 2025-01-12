@@ -1,8 +1,8 @@
 from googleapiclient.discovery import build
+from server.common import YOUTUBE_API_KEY
 
-# Замените 'YOUR_API_KEY' на свой ключ API YouTube Data API
-api_key = 'AIzaSyDmeT8Isv-2I-jkqr5K5o8bEhXg66JfTEQ'
-video_id = 'fPr3vbxnNew'  # Замените на ID видео, откуда нужно получить комментарии
+api_key = YOUTUBE_API_KEY
+video_id = 'fPr3vbxnNew' # ID видео
 
 # Создаем объект API клиента
 youtube = build('youtube', 'v3', developerKey=api_key)
